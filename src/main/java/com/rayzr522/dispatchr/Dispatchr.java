@@ -1,110 +1,107 @@
 package com.rayzr522.dispatchr;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.logging.Level;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
-import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import com.rayzr522.creativelynamedlib.config.Messages;
+import org.bukkit.scheduler.BukkitRunnable;
 
 /**
  * @author Rayzr
  */
 public class Dispatchr extends JavaPlugin {
-    private static Dispatchr instance;
-
-    private Messages lang = new Messages();
 
     @Override
     public void onEnable() {
-        instance = this;
+        // Load after everything has finished loading
+        new BukkitRunnable() {
+            public void run() {
+                load();
+            }
+        }.runTaskLater(this, 10L);
+    }
 
-        reload();
-    }
-    
-    @Override
-    public void onDisable() {
-        instance = null;
-    }
-    
-    /**
-     * (Re)loads all configs from the disk
-     */
-    public void reload() {
+    public void load() {
         saveDefaultConfig();
         reloadConfig();
-        
-        lang.load(getConfig("messages.yml"));
+
+        FileConfiguration config = getConfig();
+        config.getKeys(false).stream().filter(config::isList).forEach(key -> {
+
+            Plugin plugin = Bukkit.getPluginManager().getPlugin(key);
+            if (plugin == null) {
+                getLogger().severe("The plugin '" + key + "' is not installed!");
+                return;
+            }
+
+            List<String> commands = config.getStringList(key);
+
+            for (String command : commands) {
+                PluginCommand pluginCommand = Bukkit.getPluginCommand(String.format("%s:%s", plugin.getName(), command));
+                if (pluginCommand == null) {
+                    getLogger().severe("The command '" + command + "' could not be found in the plugin '" + key + "'!");
+                    continue;
+                }
+
+                if (pluginCommand.getExecutor() instanceof CommandWrapper) {
+                    continue;
+                }
+
+                if (pluginCommand.getExecutor() instanceof Plugin) {
+                    getLogger().warning("The command '" + command + "' in '" + key
+                            + "' was wrapped, but the command handler was the plugin itself, meaning it is possible that more than just this one command was wrapped");
+                }
+
+                pluginCommand.setExecutor(new CommandWrapper(pluginCommand.getExecutor()));
+
+                System.out.println(Bukkit.getPluginCommand(String.format("%s:%s", plugin.getName(), command)).getExecutor().getClass().getCanonicalName());
+            }
+
+        });
     }
 
-    /**
-     * If the file is not found and there is a default file in the JAR, it saves the default file to the plugin data folder first
-     * 
-     * @param path The path to the config file (relative to the plugin data folder)
-     * @return The {@link YamlConfiguration}
-     */
-    public YamlConfiguration getConfig(String path) {
-        if (!getFile(path).exists() && getResource(path) != null) {
-            saveResource(path, true);
+    private class CommandWrapper implements CommandExecutor {
+        private CommandExecutor originalExecutor;
+    
+        public CommandWrapper(CommandExecutor originalExecutor) {
+            Objects.requireNonNull(originalExecutor);
+            this.originalExecutor = originalExecutor;
+            System.out.println("Wrapped " + originalExecutor.getClass().getCanonicalName());
+    
         }
-        return YamlConfiguration.loadConfiguration(getFile(path));
-    }
     
-    /**
-     * Attempts to save a {@link YamlConfiguration} to the disk, and any {@link IOException}s are printed to the console
-     * 
-     * @param config The config to save
-     * @param path The path to save the config file to (relative to the plugin data folder)
-     */
-    public void saveConfig(YamlConfiguration config, String path) {
-        try {
-            config.save(getFile(path));
-        } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Failed to save config", e);
+        @Override
+        public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+            System.out.println("Calling wrapper");
+            if (!(sender instanceof Player)) {
+                System.out.println("Not player!");
+                return originalExecutor.onCommand(sender, command, label, args);
+            }
+    
+            String raw = String.format("/%s %s", label, Arrays.stream(args).collect(Collectors.joining(" ")));
+            System.out.println("Checking '" + raw + "'");
+    
+            PlayerCommandPreprocessEvent event = new PlayerCommandPreprocessEvent((Player) sender, raw);
+            Bukkit.getPluginManager().callEvent(event);
+    
+            if (event.isCancelled()) {
+                System.out.println("Cancelled");
+                return true;
+            }
+    
+            return originalExecutor.onCommand(sender, command, label, args);
         }
-    }
-
-    /**
-     * @param path The path of the file (relative to the plugin data folder)
-     * @return The {@link File}
-     */
-    public File getFile(String path) {
-        return new File(getDataFolder(), path.replace('/', File.pathSeparatorChar));
-    }
-    
-    /**
-     * Returns a message from the language file
-     * 
-     * @param key The key of the message to translate
-     * @param objects The formatting objects to use
-     * @return The formatted message
-     */
-    public String tr(String key, Object... objects) {
-        return lang.tr(key, objects);
-    }
-
-    /**
-     * Returns a message from the language file without adding the prefix
-     * 
-     * @param key The key of the message to translate
-     * @param objects The formatting objects to use
-     * @return The formatted message
-     */
-    public String trRaw(String key, Object... objects) {
-        return lang.trRaw(key, objects);
-    }
-
-    /**
-     * @return The {@link Messages} instance for this plugin
-     */
-    public Messages getLang() {
-        return lang;
-    }
-    
-    public static Dispatchr getInstance() {
-        return instance;
     }
 
 }

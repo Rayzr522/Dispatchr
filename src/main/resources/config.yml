@@ -1,0 +1,3 @@
+# Hooks into uSkyBlock's /island command
+uSkyBlock:
+- island
