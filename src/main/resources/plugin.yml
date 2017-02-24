@@ -1,0 +1,12 @@
+main: com.rayzr522.dispatchr.Dispatchr
+name: Dispatchr
+version: 1.0.0
+description: Wrap commands so they can be listened to when called with Bukkit.dispatchCommand
+author: Rayzr
+#depend: [CreativelyNamedLib]
+#commands:
+#  dispatchr:
+#    description: Dispatchr main command
+#    aliases: [alias1,alias2]
+#    usage: "/dispatchr [command]"
+#    permission: Dispatchr.main
