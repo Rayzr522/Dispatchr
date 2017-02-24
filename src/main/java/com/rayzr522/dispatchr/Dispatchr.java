@@ -29,7 +29,7 @@ public class Dispatchr extends JavaPlugin {
             public void run() {
                 load();
             }
-        }.runTaskLater(this, 10L);
+        }.runTaskLater(this, 1L);
     }
 
     public void load() {
@@ -71,16 +71,22 @@ public class Dispatchr extends JavaPlugin {
         });
     }
 
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        Bukkit.dispatchCommand(sender, "island");
+        return true;
+    }
+
     private class CommandWrapper implements CommandExecutor {
         private CommandExecutor originalExecutor;
-    
+
         public CommandWrapper(CommandExecutor originalExecutor) {
             Objects.requireNonNull(originalExecutor);
             this.originalExecutor = originalExecutor;
             System.out.println("Wrapped " + originalExecutor.getClass().getCanonicalName());
-    
+
         }
-    
+
         @Override
         public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
             System.out.println("Calling wrapper");
@@ -88,18 +94,18 @@ public class Dispatchr extends JavaPlugin {
                 System.out.println("Not player!");
                 return originalExecutor.onCommand(sender, command, label, args);
             }
-    
+
             String raw = String.format("/%s %s", label, Arrays.stream(args).collect(Collectors.joining(" ")));
             System.out.println("Checking '" + raw + "'");
-    
+
             PlayerCommandPreprocessEvent event = new PlayerCommandPreprocessEvent((Player) sender, raw);
             Bukkit.getPluginManager().callEvent(event);
-    
+
             if (event.isCancelled()) {
                 System.out.println("Cancelled");
                 return true;
             }
-    
+
             return originalExecutor.onCommand(sender, command, label, args);
         }
     }
